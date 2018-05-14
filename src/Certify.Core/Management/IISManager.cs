@@ -571,35 +571,38 @@ namespace Certify.Management
                 {
                     string internationalHost = host == "" ? "" : ToUnicodeString(host);
                     var existingBinding = (from b in siteToUpdate.Bindings where b.Host == internationalHost && b.Protocol == "https" select b).FirstOrDefault();
+                    string bindingSpec = "";
 
                     if (existingBinding != null)
                     {
-                        // Update existing https Binding
-                        existingBinding.CertificateHash = certificate.GetCertHash();
-                        existingBinding.CertificateStoreName = store.Name;
+                        // save off old binding information
+                        bindingSpec = existingBinding.BindingInformation;
+                        var bindingAttributes = existingBinding.Attributes;
+
+                        // remove old binding
+                        siteToUpdate.Bindings.Remove(existingBinding);
                     }
                     else
                     {
                         //add new https binding at default port "<ip>:port:hostDnsName";
-                        string bindingSpec = (!String.IsNullOrEmpty(ipAddress) ? ipAddress : "*") +
+                        bindingSpec = (!String.IsNullOrEmpty(ipAddress) ? ipAddress : "*") +
                             ":" + sslPort + ":" + internationalHost;
+                    }
 
-                        var iisBinding = siteToUpdate.Bindings.Add(bindingSpec, certificate.GetCertHash(), store.Name);
+                    var iisBinding = siteToUpdate.Bindings.Add(bindingSpec, certificate.GetCertHash(), store.Name);
+                    iisBinding.Protocol = "https";
 
-                        iisBinding.Protocol = "https";
-
-                        if (useSNI)
+                    if (useSNI)
+                    {
+                        try
                         {
-                            try
-                            {
-                                iisBinding["sslFlags"] = 1; //enable sni
-                            }
-                            catch (Exception)
-                            {
-                                // failed to enable SNI
-                                store.Close();
-                                return false;
-                            }
+                            iisBinding["sslFlags"] = 1; //enable sni
+                        }
+                        catch (Exception)
+                        {
+                            // failed to enable SNI
+                            store.Close();
+                            return false;
                         }
                     }
                 }
